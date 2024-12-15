@@ -1,3 +1,3 @@
-# Team 36 CSCI 544 Final Project: 
+# Team 36 CSCI 544 Final Project
 
-Classifying Multilingual News Article Similarity
+## Classifying Multilingual News Article Similarity
