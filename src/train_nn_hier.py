@@ -1,3 +1,12 @@
+###############################
+###############################
+
+# Most of this code was originally created by https://github.com/upura/semeval2022-task8-multilingual-news-article-similarity/tree/master
+# The goal of our project was to take a model that got decent results and try to improve with better embeddings
+# All of the improvements/changes to the code are clearly marked
+
+###############################
+###############################
 import argparse
 import dataclasses
 import os
@@ -5,7 +14,7 @@ import sys
 from collections import OrderedDict
 from typing import Any, Dict, List
 
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score ## ADDED ##
 
 import numpy as np
 import pandas as pd
@@ -48,7 +57,7 @@ class MyLightningModule(pl.LightningModule):
         )
         self.criterion = RMSELoss()
         self.lr = cfg.LEARNING_RATE
-        self.validation_outputs = []
+        self.validation_outputs = [] ## ADDED ##
 
     def forward(self, x):
         ids1 = x["ids1"]
@@ -113,14 +122,6 @@ class MyLightningModule(pl.LightningModule):
         ## ADDED ##
         preds = torch.round(output)
         ###########
-
-        # output = OrderedDict(
-        #     {
-        #         "targets": targets.detach(),
-        #         "preds": output.detach(),
-        #         "loss": loss.detach(),
-        #     }
-        # )
         self.validation_outputs.append({
             "targets": targets.detach(),
             "preds": output.detach(),
@@ -128,67 +129,22 @@ class MyLightningModule(pl.LightningModule):
         })
         return output
 
-    # def validation_epoch_end(self, outputs):
-    #     d = dict()
-    #     d["epoch"] = int(self.current_epoch)
-    #     d["v_loss"] = torch.stack([o["loss"] for o in outputs]).mean().item()
-
-    #     targets = torch.cat([o["targets"].view(-1) for o in outputs]).cpu().numpy()
-    #     preds = torch.cat([o["preds"].view(-1) for o in outputs]).cpu().numpy()
-
-    #     score = pd.DataFrame({"targets": targets, "preds": preds}).corr()["targets"][
-    #         "preds"
-    #     ]
-    #     d["v_score"] = score
-    #     self.log_dict(d, prog_bar=True)
-    # def on_validation_epoch_end(self):
-    #     d = dict()
-    #     d["epoch"] = int(self.current_epoch)
-        
-    #     # Process stored validation outputs
-    #     outputs = self.validation_outputs
-    #     d["v_loss"] = torch.stack([o["loss"] for o in outputs]).mean().item()
-
-    #     targets = torch.cat([o["targets"].view(-1) for o in outputs]).cpu().numpy()
-    #     preds = torch.cat([o["preds"].view(-1) for o in outputs]).cpu().numpy()
-
-    #     score = pd.DataFrame({"targets": targets, "preds": preds}).corr()["targets"][
-    #         "preds"
-    #     ]
-    #     d["v_P_score"] = score
-
-    #     # rmse, mae, r^2
-    #     rmse = np.sqrt(mean_squared_error(targets, preds))
-    #     mae = mean_absolute_error(targets, preds)
-    #     r2 = r2_score(targets, preds)
-
-    #     d["v_rmse"] = rmse
-    #     d["v_mae"] = mae
-    #     d["v_r2"] = r2
-        
-    #     # Log the metrics
-    #     self.log_dict(d, prog_bar=True)
-        
-    #     # Clear the outputs for the next epoch
-    #     self.validation_outputs.clear()
+    ## UPDATED NAME/FUNCTION BUT KEPT OVERALL STRUCTURE ##
     def on_validation_epoch_end(self):
         d = dict()
         d["epoch"] = int(self.current_epoch)
-        
-        # Process stored validation outputs
         outputs = self.validation_outputs
         d["v_loss"] = torch.stack([o["loss"] for o in outputs]).mean().item()
     
         targets = torch.cat([o["targets"].view(-1) for o in outputs]).cpu().numpy()
         preds = torch.cat([o["preds"].view(-1) for o in outputs]).cpu().numpy()
-    
-        # Overall metrics
         score = pd.DataFrame({"targets": targets, "preds": preds}).corr()["targets"][
             "preds"
         ]
+        # Pearson Correlation Coefficient
         d["v_P_score"] = score
     
-        # rmse, mae, r^2
+        # add rmse, mae, r^2
         rmse = np.sqrt(mean_squared_error(targets, preds))
         mae = mean_absolute_error(targets, preds)
         r2 = r2_score(targets, preds)
@@ -197,15 +153,12 @@ class MyLightningModule(pl.LightningModule):
         d["v_mae"] = mae
         d["v_r2"] = r2
         
-        # If it's the last epoch, calculate metrics by language-language pair
+        # if last epoch, calculate metrics by language-language pair
         if self.current_epoch == (self.trainer.max_epochs - 1):
-            # Load the validation dataframe to get language information
             val_df = self.trainer.datamodule.valid_df
-            
-            # Add predictions to the dataframe
             val_df['preds'] = preds
             
-            # Group by language pair and calculate metrics
+            # group by language pair and calculate metrics
             language_pair_metrics = val_df.groupby('meta_lang').apply(lambda group: {
                 'v_P_score': pd.DataFrame({
                     'targets': group['Overall'], 
@@ -216,17 +169,16 @@ class MyLightningModule(pl.LightningModule):
                 'v_r2': r2_score(group['Overall'], group['preds'])
             }).to_dict()
             
-            # Log metrics for each language pair
+            # get metrics for each pair
             for lang_pair, metrics in language_pair_metrics.items():
                 d[f"{lang_pair}_v_P_score"] = metrics['v_P_score']
                 d[f"{lang_pair}_v_rmse"] = metrics['v_rmse']
                 d[f"{lang_pair}_v_mae"] = metrics['v_mae']
                 d[f"{lang_pair}_v_r2"] = metrics['v_r2']
         
-        # Log the metrics
         self.log_dict(d, prog_bar=True)
         
-        # Clear the outputs for the next epoch
+        # clear for next epoch
         self.validation_outputs.clear()
 
     def configure_optimizers(self):
@@ -273,9 +225,9 @@ class TextDataset(Dataset):
             return_token_type_ids=True,
         )
         self.features = (
-            pd.read_csv("544_FinalProject/input/semeval2022/X_train.csv")
+            pd.read_csv("544_FinalProject/input/semeval2022/X_train.csv") ## Update local path ##
             if is_train
-            else pd.read_csv("544_FinalProject/input/semeval2022/X_test.csv")
+            else pd.read_csv("544_FinalProject/input/semeval2022/X_test.csv") ## Update local path ##
         )
 
     def __len__(self):
@@ -322,42 +274,12 @@ class MyDataModule(pl.LightningDataModule):
         self.valid_df = None
         self.cfg = cfg
 
-    # def merge_df_and_text(self, df, text_dataframe):
-    #     text_dataframe = text_dataframe.dropna(subset=["title", "text"]).reset_index(
-    #         drop=True
-    #     )
-    #     text_dataframe["title"] = (
-    #         text_dataframe["title"].fillna("")
-    #         + "[SEP]"
-    #         + text_dataframe["text"].fillna("")
-    #     )
-    #     text_dataframe["text_id"] = text_dataframe["text_id"].astype(str)
-    #     df = df[
-    #         df["pair_id"].map(lambda x: contain_text(text_dataframe, x))
-    #     ].reset_index(drop=True)
-    #     df["text_id1"] = df["pair_id"].str.split("_").map(lambda x: x[0])
-    #     df["text_id2"] = df["pair_id"].str.split("_").map(lambda x: x[1])
-
-    #     df = pd.merge(
-    #         df,
-    #         text_dataframe[["text_id", "title"]],
-    #         left_on="text_id1",
-    #         right_on="text_id",
-    #         how="left",
-    #     )
-    #     df = pd.merge(
-    #         df,
-    #         text_dataframe[["text_id", "title"]],
-    #         left_on="text_id2",
-    #         right_on="text_id",
-    #         how="left",
-    #         suffixes=("_1", "_2"),
-    #     )
-    #     return df
+    ## UPDATED FUNCTION BUT NOT OVERALL STRUCTURE ##
     def merge_df_and_text(self, df, text_dataframe):
         text_dataframe = text_dataframe.dropna(subset=["title", "text"]).reset_index(
             drop=True
         )
+        # add so that we can calculate language-language pair metrics
         if 'meta_lang' not in text_dataframe.columns:
             print("Warning: 'meta_lang' column not found in text_dataframe")
             
@@ -373,21 +295,7 @@ class MyDataModule(pl.LightningDataModule):
         df["text_id1"] = df["pair_id"].str.split("_").map(lambda x: x[0])
         df["text_id2"] = df["pair_id"].str.split("_").map(lambda x: x[1])
 
-        # df = pd.merge(
-        #     df,
-        #     text_dataframe[["text_id", "title"]],
-        #     left_on="text_id1",
-        #     right_on="text_id",
-        #     how="left",
-        # )
-        # df = pd.merge(
-        #     df,
-        #     text_dataframe[["text_id", "title"]],
-        #     left_on="text_id2",
-        #     right_on="text_id",
-        #     how="left",
-        #     suffixes=("_1", "_2"),
-        # )
+        ## ADDED ##
         if 'meta_lang' in text_dataframe.columns:
             df = pd.merge(
                 df,
@@ -405,14 +313,14 @@ class MyDataModule(pl.LightningDataModule):
                 suffixes=("_1", "_2"),
             )
             
-            # Create a combined meta_lang column
+            # add new lang-lang column
             df['meta_lang'] = df['meta_lang_1'] + '_' + df['meta_lang_2']
         return df
 
     def get_test_df(self):
         df = pd.read_csv(self.cfg.TEST_DF_PATH)
         text_dataframe = pd.read_csv(
-            "544_FinalProject/input/semeval2022/text_dataframe_eval.csv", low_memory=False
+            "544_FinalProject/input/semeval2022/text_dataframe_eval.csv", low_memory=False ## Update local path ##
         )
         df = self.merge_df_and_text(df, text_dataframe)
         return df
@@ -424,7 +332,7 @@ class MyDataModule(pl.LightningDataModule):
             df = pd.read_csv(self.cfg.TRAIN_DF_PATH)
 
         text_dataframe = pd.read_csv(
-            "544_FinalProject/input/semeval2022/text_dataframe.csv", low_memory=False
+            "544_FinalProject/input/semeval2022/text_dataframe.csv", low_memory=False ## Update local path ##
         )
         df = self.merge_df_and_text(df, text_dataframe)
         cv = KFold(n_splits=self.cfg.NUM_FOLDS, shuffle=True, random_state=42)
@@ -491,8 +399,8 @@ class MyModel(nn.Module):
         model_path: str,
         num_classes: List[int],
         transformer_params: Dict[str, Any] = {},
-        custom_header: str = "hierarchical",
-        embedding_layers: List[int] = None
+        custom_header: str = "hierarchical", # customized header for hierarchical embeddings 
+        embedding_layers: List[int] = None ## ADDED ##
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -505,7 +413,7 @@ class MyModel(nn.Module):
         
         ## CHANGED ##
         if embedding_layers is None:
-            embedding_layers = [-1, -2, -3, -4] # Default last 4 layers for hierarchical embeddings
+            embedding_layers = [-1, -2, -3, -4] # use last 4 layers for hierarchical embeddings
 
         self.embedding_layers = embedding_layers
 
@@ -518,7 +426,7 @@ class MyModel(nn.Module):
     ## ADDED ##
     def extract_hierarchical_embeddings(self, outputs):
         """
-        Extract and concatenate embeddings from specified layers.
+        Extract and concatenate embeddings from specified layers
         """
 
         hidden_states = outputs["hidden_states"]
@@ -550,14 +458,14 @@ class MyModel(nn.Module):
             output_hidden_states = True ## ADDED ##
         )
         ## CHANGED ##
-
         if self.custom_header == "hierarchical":
             sequence_output1 = self.extract_hierarchical_embeddings(outputs1)
             sequence_output2 = self.extract_hierarchical_embeddings(outputs2)
         else:
-            # Fallback to default max pooling
+            # otherwise, default max pooling
             sequence_output1, _ = outputs1["last_hidden_state"].max(1)
             sequence_output2, _ = outputs2["last_hidden_state"].max(1)
+        #############
         
         sequence_output = torch.cat(
             [
@@ -567,8 +475,6 @@ class MyModel(nn.Module):
             dim=1,
         )
         outputs = self.fc(torch.cat([sequence_output, features], dim=1))
-        
-        #############
         return outputs
 
 
@@ -577,7 +483,7 @@ class Cfg:
     PROJECT_NAME = "semeval2022"
     RUN_NAME = "exp000"
     NUM_CLASSES = 1
-    NUM_EPOCHS = 5
+    NUM_EPOCHS = 5 ## CHANGED NUM EPOCHS ##
     NUM_WORKERS = 8
     NUM_GPUS = 1
     MAX_LEN = 512
@@ -588,8 +494,8 @@ class Cfg:
         "layer_norm_eps": 1e-7,
     }
     OUTPUT_PATH = "."
-    TRAIN_DF_PATH = "544_FinalProject/input/semeval2022/semeval-2022_task8_train-data_batch.csv"
-    TEST_DF_PATH = "544_FinalProject/input/semeval2022/PUBLIC-semeval-2022_task8_eval_data_202201.csv"
+    TRAIN_DF_PATH = "544_FinalProject/input/semeval2022/semeval-2022_task8_train-data_batch.csv" ## Update local path ##
+    TEST_DF_PATH = "544_FinalProject/input/semeval2022/PUBLIC-semeval-2022_task8_eval_data_202201.csv" ## Update local path ##
     TEXT_COL = "title"
     TARGET_COL = "Overall"
     ## ADDED ##
@@ -603,7 +509,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_len", default=512)
     parser.add_argument("--num_folds", default=5)
     parser.add_argument("--model", default="bert-base-multilingual-cased")
-    # parser.add_argument("--model", default="xlm-roberta-base")
+    # parser.add_argument("--model", default="xlm-roberta-base") ## CHANGE DEPENDING ON WHICH MODEL WE WANT TO RUN ##
     parser.add_argument("--custom_header", default="concat")
     parser.add_argument("--lr", default=1e-5)
     args = parser.parse_args()
@@ -622,13 +528,7 @@ if __name__ == "__main__":
     seed_everything(777)
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
-    # if "google.colab" in sys.modules:
-    #     secret_value = "YOUR_SECRET"
-    # else:
-    #     from kaggle_secrets import UserSecretsClient
-
-    #     user_secrets = UserSecretsClient()
-    #     secret_value = user_secrets.get_secret("WANDB_API_KEY")
+    ## CREATED PERSONAL WANDB KEY ##
     wandb.login(key='252ce179feb7d7fc79bb9100d97815ed8578542f')
 
     logger = CSVLogger(save_dir=str(cfg.OUTPUT_PATH), name=f"fold_{cfg.fold}")
@@ -645,8 +545,8 @@ if __name__ == "__main__":
     
     trainer = Trainer(
     max_epochs=cfg.NUM_EPOCHS,
-    accelerator="gpu" if cfg.NUM_GPUS > 0 else "cpu",  # Dynamically set the accelerator
-    devices=cfg.NUM_GPUS if cfg.NUM_GPUS > 0 else None,  # Set number of devices
+    accelerator="gpu" if cfg.NUM_GPUS > 0 else "cpu",  # update Trainer so it works for us 
+    devices=cfg.NUM_GPUS if cfg.NUM_GPUS > 0 else None,  # update Trainer so it works for us 
     callbacks=[checkpoint_callback],
     logger=[logger, wandb_logger],
     )
@@ -684,7 +584,6 @@ if __name__ == "__main__":
     sub.loc[
         ~sub["pair_id"].isin(rule_based_pair_ids), cfg.TARGET_COL
     ] = y_test_pred.reshape(-1)
-    
     # Because the labels of training data are reversed at the initial release
     sub["Overall"] = sub["Overall"] * -1
     sub[["pair_id", cfg.TARGET_COL]].to_csv("submission.csv", index=False)
